@@ -1,7 +1,7 @@
 package com.assignment.controller;
 
 import com.assignment.DTO.UserRegistrationDTO;
-import com.assignment.implmentation.UserServiceImp;
+import com.assignment.services.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
