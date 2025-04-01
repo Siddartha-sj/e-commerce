@@ -1,5 +1,6 @@
 package com.assignment.entites;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ public class Order extends Audit {
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
     @Column(nullable = false)
@@ -28,14 +30,39 @@ public class Order extends Audit {
 
     @ManyToOne
     @JoinColumn(name = "promocode_id", nullable = true)
+    @JsonIgnore
     private PromoCode promoCode;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<OrderItem> orderItems;
 
     @OneToOne
     @JoinColumn(name = "payment_id", nullable = true)
+    @JsonIgnore
     private Payment payment;
+
+    @Column(nullable = false)
+    private String address;
+
+    @Column(nullable = false)
+    private String phoneNumber;
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
 
     public Double getTotalAmount() {
         return totalAmount;

@@ -11,6 +11,7 @@ public class Audit {
 
     public boolean isDeleted;
     public boolean isArchived;
+
     @CreationTimestamp
     public LocalDateTime createdAt;
 

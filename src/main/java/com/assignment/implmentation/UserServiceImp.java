@@ -1,29 +1,39 @@
 package com.assignment.implmentation;
 
-import com.assignment.DTO.UserRegistrationDTO;
+import com.assignment.DTO.*;
+import com.assignment.config.JWTService;
 import com.assignment.entites.*;
+import com.assignment.exception.InvalidDataException;
+import com.assignment.exception.ResourceNotFoundException;
 import com.assignment.repository.*;
 import com.assignment.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
-import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Implementation of the UserService interface.
+ * <p>
+ * This service provides functionalities related to user management, including
+ * registration, login, address update, and user retrieval or deletion.
+ * </p>
+ */
 @Service
 public class UserServiceImp implements UserService {
 
-    //   @Autowired
-    //   BCryptPasswordEncoder passwordEncoder;
 
     @Autowired
     UserRepository userRepository;
 
-    @Autowired
-    ProductRepository productRepository;
 
     @Autowired
     CartRepository cartRepository;
@@ -31,30 +41,34 @@ public class UserServiceImp implements UserService {
     @Autowired
     WalletRepository walletRepository;
 
-    @Autowired
-    CartItemRepository cartItemRepository;
-
-    @Autowired
-    OrderRepository orderRepository;
-
-    @Autowired
-    OrderItemRepository orderItemRepository;
-
-    @Autowired
-    PromoCodeRepository promoCodeRepository;
 
     @Autowired
     RoleRepository roleRepository;
 
-    @Autowired
-    TransactionRepository transactionRepository;
 
     @Autowired
-    PaymentRepository paymentRepository;
+    JWTService jwtService;
+
+    @Autowired
+    AuthenticationManager authenticationManager;
+
+    BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
 
 
+    /**
+     * Registers a new user based on the provided registration details.
+     * <p>
+     * It checks for duplicate usernames and emails, assigns a role (USER or ADMIN),
+     * and creates a wallet and cart for regular users. Returns a success message
+     * or validation errors.
+     * </p>
+     *
+     * @param userRegistrationDTO The DTO containing registration details.
+     * @param bindingResult       The result of input validation.
+     * @return ResponseEntity containing success or error message.
+     */
     @Override
-    public ResponseEntity<Object> save(UserRegistrationDTO userRegistrationDTO, BindingResult bindingResult) {
+    public ResponseEntity<Object> register(UserRegistrationDTO userRegistrationDTO, BindingResult bindingResult) {
 
 
         if (bindingResult.hasErrors()) {
@@ -64,314 +78,271 @@ public class UserServiceImp implements UserService {
             });
             return new ResponseEntity<>(errorMap, HttpStatus.BAD_REQUEST);
         }
-        Map<String, Object> map = new HashMap<>();
+
+        // Check for duplicate username and email
+        if (userRepository.findByUsername(userRegistrationDTO.getUsername()) != null) {
+            throw new InvalidDataException("Username is already taken");
+        }
+        if (userRepository.findByEmail(userRegistrationDTO.getEmail()) != null) {
+            throw new InvalidDataException("Email is already taken");
+        }
+
+        // Find role based on user type (ADMIN or USER)
+        Role role = roleRepository.findById(userRegistrationDTO.getRole().equalsIgnoreCase("ADMIN") ? 2 : 1)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
 
         User user = new User();
         user.setUsername(userRegistrationDTO.getUsername());
-        user.setPassword(userRegistrationDTO.getPassword());
+        user.setPassword(encoder.encode(userRegistrationDTO.getPassword()));
         user.setEmail(userRegistrationDTO.getEmail());
-        user.setRole(roleRepository.findById(1).get());
-
-        Wallet wallet = new Wallet();
-        wallet.setUser(user);
-        Cart cart = new Cart();
-        cart.setUser(user);
+        user.setRole(role);
 
         userRepository.save(user);
-        cartRepository.save(cart);
-        walletRepository.save(wallet);
 
-        map.put("message", "successfully inserted");
 
-        return new ResponseEntity<>(map, HttpStatus.OK);
-    }
+        // Create wallet and cart if the user is a regular user
+        if (userRegistrationDTO.getRole().equalsIgnoreCase("USER")) {
 
-    @Override
-    public ResponseEntity<Object> login(String username, String password) {
-        // Fetch the user by username
-        Map<String, Object> map = new HashMap<>();
-        Optional<User> optionalUser = userRepository.findByUsername(username);
-        if (optionalUser.isPresent()) {
-            User user = optionalUser.get();
-            // Check if password matches using BCrypt
-            // return passwordEncoder.matches(password, user.getPassword());
-            String currentUsername = user.getUsername();
-            String currentPassword = user.getPassword();
-            if (currentUsername.equals(username) && currentPassword.equals(password)) {
-                map.put("message", "Login Successful!");
-                return new ResponseEntity<>(map, HttpStatus.OK);
-            }
-        }
-        map.put("message", "Login Failed!");
-        return new ResponseEntity<>(map, HttpStatus.UNAUTHORIZED);  // Return false if the user is not found
-    }
+            // Create and save wallet and cart for user
+            Wallet wallet = new Wallet();
+            wallet.setUser(user);
+            walletRepository.save(wallet);
 
-    @Override
-    public ResponseEntity<Object> findAllProduct() {
-        Map<String, Object> map = new HashMap<>();
-        List<Product> list = productRepository.findAll();
-        map.put("Products", list);
-        return new ResponseEntity<>(map, HttpStatus.OK);
-    }
+            Cart cart = new Cart();
+            cart.setUser(user);
+            cartRepository.save(cart);
+            return ResponseEntity.ok(Map.of("message", "User successfully created with wallet and cart"));
 
-    @Override
-    public ResponseEntity<Object> addProductToCart(int userId, int productId, int quantity) {
-        Map<String, Object> map = new HashMap<>();
 
-        // Fetch user and product
-        Optional<User> userOptional = userRepository.findById(userId);
-        Optional<Product> productOptional = productRepository.findById(productId);
-
-        if (userOptional.isEmpty() || productOptional.isEmpty()) {
-            map.put("message", "User or Product not found!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
-
-        User user = userOptional.get();
-        Product product = productOptional.get();
-
-        // Check if product is active
-        if (!product.getActive()) {
-            map.put("message", "This product is no longer available.");
-            return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-        }
-
-        // Check if there is enough stock for the requested quantity
-        int availableStock = product.getSku();  // Assuming 'getStock()' gives the available stock
-        if (availableStock < quantity) {
-            map.put("message", "Not enough stock available for this product.");
-            return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-        }
-
-        // Deduct the quantity from the stock
-        product.setSku(availableStock - quantity);
-
-        // Save the updated product back to the repository to reflect the new stock
-        productRepository.save(product);
-
-        // Find the user's existing cart
-        Cart cart = cartRepository.findByUser(user);
-
-        if (cart == null) {
-            map.put("message", "Cart not found for the user!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
-
-        // Check if the product already exists in the cart
-        Optional<CartItem> existingCartItemOptional = cartItemRepository.findByCartAndProduct(cart, product);
-
-        if (existingCartItemOptional.isPresent()) {
-            // If product exists, update the quantity
-            CartItem existingCartItem = existingCartItemOptional.get();
-            existingCartItem.setQuantity(existingCartItem.getQuantity() + quantity);
-            cartItemRepository.save(existingCartItem);
-            map.put("message", "Product quantity updated in cart.");
-            return new ResponseEntity<>(map, HttpStatus.OK);
+        } else if (userRegistrationDTO.getRole().equalsIgnoreCase("ADMIN")) {
+            // If it's an ADMIN, save only the user and return appropriate message
+            return ResponseEntity.ok(Map.of("message", "Admin user successfully created"));
         } else {
-            // If product does not exist, create a new cart item
-            CartItem newCartItem = new CartItem();
-            newCartItem.setCart(cart);
-            newCartItem.setProduct(product);
-            newCartItem.setQuantity(quantity);
-            cartItemRepository.save(newCartItem);
-            map.put("message", "Product added to cart.");
-            return new ResponseEntity<>(map, HttpStatus.OK);
+            // If it's an ADMIN, save only the user and return appropriate message
+            throw new InvalidDataException("Role has to be USER or ADMIN!");
         }
+
+
+    }
+
+    /**
+     * Authenticates a user and generates a JWT token if the credentials are valid.
+     * <p>
+     * Verifies username and password using bcrypt and Spring Security’s authentication manager.
+     * Returns a JWT token and success message or error message if authentication fails.
+     * </p>
+     *
+     * @param loginDTO      The DTO containing login details.
+     * @param bindingResult The result of input validation.
+     * @return ResponseEntity containing a token and message or error information.
+     */
+    @Override
+    public ResponseEntity<Object> login(LoginDTO loginDTO, BindingResult bindingResult) {
+
+        if (bindingResult.hasErrors()) {
+            Map<String, String> errorMap = new HashMap<>();
+            bindingResult.getFieldErrors().forEach(error -> {
+                errorMap.put(error.getField(), error.getDefaultMessage());
+            });
+            return new ResponseEntity<>(errorMap, HttpStatus.BAD_REQUEST);
+        }
+
+
+        // Find user by username
+        User existingUser = userRepository.findByUsername(loginDTO.getUsername());
+
+        // Check if the user exists
+        if (existingUser == null) {
+            throw new InvalidDataException("User not found!");
+        }
+
+        // Verify the password using bcrypt or other encoding mechanism
+        if (!encoder.matches(loginDTO.getPassword(), existingUser.getPassword())) {
+            throw new InvalidDataException("Bad credentials!");
+        }
+
+        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginDTO.getUsername(), loginDTO.getPassword()));
+
+        if (authentication.isAuthenticated()) {
+            String token = jwtService.generateToken(loginDTO.getUsername(), existingUser.getRole().getName());
+
+            return ResponseEntity.ok(Map.of(
+                    "token", token,
+                    "message", "Login Successful!"
+            ));
+
+        }
+
+        throw new InvalidDataException("Login Failed!"); // Return false if the user is not found
+    }
+
+
+    /**
+     * Updates the address and phone number for the authenticated user.
+     * <p>
+     * Extracts the username from the JWT token provided in the authorization header
+     * and updates the user’s address and phone number.
+     * </p>
+     *
+     * @param authorizationHeader The authorization header containing the JWT token.
+     * @param addressRequestDTO   The DTO containing address and phone number.
+     * @param bindingResult       The result of input validation.
+     * @return ResponseEntity with success message or validation errors.
+     */
+    @Override
+    public ResponseEntity<Object> updateAddress(String authorizationHeader, AddressRequestDTO addressRequestDTO, BindingResult bindingResult) {
+
+        if (bindingResult.hasErrors()) {
+            Map<String, String> errorMap = new HashMap<>();
+            bindingResult.getFieldErrors().forEach(error -> {
+                errorMap.put(error.getField(), error.getDefaultMessage());
+            });
+            return new ResponseEntity<>(errorMap, HttpStatus.BAD_REQUEST);
+        }
+
+
+        String token = authorizationHeader.replace("Bearer ", "");
+        String username = jwtService.extractUserName(token);
+        User user = Optional.ofNullable(userRepository.findByUsername(username))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
+
+
+        // Update address and phone number in the user entity
+        user.setAddress(addressRequestDTO.getAddress());
+        user.setPhoneNumber(addressRequestDTO.getPhoneNumber());
+
+        // Save the updated user entity
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("message", "Address and phone number updated successfully!"));
     }
 
     @Override
-    public ResponseEntity<Object> removeProductFromCart(int userId, int productId) {
-        // Initialize response map
-        Map<String, Object> map = new HashMap<>();
+    public ResponseEntity<Object> updateUserProfile(String authorizationHeader, UserDTO userDTO) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        String username = jwtService.extractUserName(token);
 
-        // Fetch the user and product from the database
-        Optional<User> userOptional = userRepository.findById(userId);
-        Optional<Product> productOptional = productRepository.findById(productId);
+        User user = Optional.ofNullable(userRepository.findByUsername(username))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
 
-        // Check if user or product exist
-        if (userOptional.isEmpty() || productOptional.isEmpty()) {
-            map.put("message", "User or Product not found!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
+        // ✅ Update fields if provided
+        if (userDTO.getAddress() != null) {
+            user.setAddress(userDTO.getAddress());
+        }
+        if (userDTO.getPhoneNumber() != null) {
+            user.setPhoneNumber(userDTO.getPhoneNumber());
+        }
+        if (userDTO.getEmail() != null) {
+            user.setEmail(userDTO.getEmail());
         }
 
-        User user = userOptional.get();
-        Product product = productOptional.get();
+        // ✅ Save updated user
+        userRepository.save(user);
 
-        // Find the user's existing cart
-        Cart cart = cartRepository.findByUser(user);
-
-        // Check if cart exists
-        if (cart == null) {
-            map.put("message", "Cart not found for the user!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
-
-        // Find the CartItem for the given product
-        Optional<CartItem> cartItemOptional = cartItemRepository.findByCartAndProduct(cart, product);
-
-        // Check if product exists in the cart
-        if (cartItemOptional.isEmpty()) {
-            map.put("message", "Product not found in the cart!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
-
-        // Retrieve the CartItem
-        CartItem cartItem = cartItemOptional.get();
-
-        // Retrieve the quantity of the product in the cart
-        int quantityInCart = cartItem.getQuantity();
-
-        // Remove the CartItem from the cart
-        cartItemRepository.delete(cartItem);
-
-        // Update the product's quantity back to the Product table
-        product.setSku(product.getSku() + quantityInCart);
-        productRepository.save(product);
-
-        // Create response message
-        map.put("message", "Product removed from cart and stock updated.");
-
-        // Return successful response
-        return new ResponseEntity<>(map, HttpStatus.OK);
+        // ✅ Return updated profile
+        return ResponseEntity.ok(Map.of("message", "Profile updated successfully!"));
     }
 
     @Override
-    public ResponseEntity<Object> placeOrder(int userId, String promoCode) {
+    public ResponseEntity<Object> getUserProfile(String authorizationHeader) {
+        String token = authorizationHeader.replace("Bearer ", "");
+        String username = jwtService.extractUserName(token);
+        User user = Optional.ofNullable(userRepository.findByUsername(username))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found!"));
 
-        Map<String, Object> map = new HashMap<>();
+        // Map to UserDTO
+        double walletBalance = user.getWallet() != null ? user.getWallet().getBalance() : 0.0;
 
-        // Fetch the user's details and wallet
-        Optional<User> userOptional = userRepository.findById(userId);
 
-        if (userOptional.isEmpty()) {
-            map.put("message", "User not found!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
 
-        User user = userOptional.get();
+        return ResponseEntity.ok(Map.of("Data", new UserDTO(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole().getName(),
+                user.getWallet() != null,
+                user.getAddress(),
+                user.getPhoneNumber(),
+                walletBalance)));
 
-        // Fetch user's wallet
-        Optional<Wallet> walletOptional = walletRepository.findByUser(user);
-
-        if (walletOptional.isEmpty()) {
-            map.put("message", "User wallet not found!");
-            return new ResponseEntity<>(map, HttpStatus.NOT_FOUND);
-        }
-
-        Wallet wallet = walletOptional.get();
-
-        Cart cart = cartRepository.findByUser(user);
-
-        if (cart == null || cart.getCartItems().isEmpty()) {
-            map.put("message", "Cart is empty!");
-            return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-        }
-
-        // Calculate the total amount for the order
-        double totalAmount = 0.0;
-        for (CartItem cartItem : cart.getCartItems()) {
-            totalAmount += cartItem.getProduct().getPrice() * cartItem.getQuantity();
-        }
-
-        // Check if the promo code is applicable
-        PromoCode activePromoCode = null;
-        if (promoCode != null && !promoCode.isEmpty()) {
-            Optional<PromoCode> promoCodeOptional = promoCodeRepository.findByCode(promoCode);
-            if (promoCodeOptional.isPresent()) {
-                activePromoCode = promoCodeOptional.get();
-
-                // Check if the promo code is valid and active
-                if (!activePromoCode.getActive()) {
-                    map.put("message", "Promo code is not active!");
-                    return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-                }
-
-                // Check if the promo code has expired
-                if (activePromoCode.getExpiryDate() != null && activePromoCode.getExpiryDate().isBefore(LocalDate.now())) {
-                    map.put("message", "Promo code has expired!");
-                    return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-                }
-
-                // Check if the total amount meets the minimum order amount required by the promo code
-                if (totalAmount < activePromoCode.getMinOrderAmount()) {
-                    map.put("message", "Total amount does not meet the minimum order amount for this promo code!");
-                    return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-                }
-
-                // Apply the discount if the promo code is applicable
-                if (activePromoCode.getProductSpecific() && activePromoCode.getProduct() != null) {
-                    // Apply discount only to the specific product
-                    for (CartItem cartItem : cart.getCartItems()) {
-                        if (cartItem.getProduct().equals(activePromoCode.getProduct())) {
-                            totalAmount -= cartItem.getProduct().getPrice() * cartItem.getQuantity() * (activePromoCode.getDiscountPercentage() / 100);
-                            break;  // Only apply discount once for product-specific promo codes
-                        }
-                    }
-                } else {
-                    // Apply discount for general promo codes
-                    totalAmount -= totalAmount * (activePromoCode.getDiscountPercentage() / 100);
-                }
-            }
-        }
-
-        // Record the transaction even if the wallet balance is insufficient
-        Transaction transaction = new Transaction();
-        transaction.setAmount(totalAmount);
-        transaction.setTransactionStatus(false);  // Set the transaction status as failed initially
-        transaction.setTransactionDate(LocalDate.now());
-        transactionRepository.save(transaction);  // Save the transaction regardless of success
-
-        // Check if the user has sufficient balance in the wallet
-        if (wallet.getBalance() < totalAmount) {
-            map.put("message", "Insufficient wallet balance!");
-            return new ResponseEntity<>(map, HttpStatus.BAD_REQUEST);
-        }
-
-        // Deduct the order total from the wallet balance
-        wallet.setBalance(wallet.getBalance() - totalAmount);
-        walletRepository.save(wallet); // Save the updated wallet balance
-
-        // Create the order
-        Order order = new Order();
-        order.setUser(user);
-        order.setTotalAmount(totalAmount);
-        order.setStatus("PLACED");
-        order.setOrderDate(LocalDate.now());
-
-        // Set the promo code if it exists
-        if (activePromoCode != null) {
-            order.setPromoCode(activePromoCode);
-        }
-
-        // Save the order to the database (orderRepository is assumed to exist)
-        orderRepository.save(order);
-
-        // Create the payment record
-        Payment payment = new Payment();
-        payment.setAmountPaid(totalAmount);
-        payment.setPaymentDate(LocalDate.now());
-        payment.setPaymentMethod("WALLET");  // Assuming payment method is wallet
-        payment.setTransaction(transaction);  // Link the transaction to the payment
-
-        // Save the payment
-        paymentRepository.save(payment);
-
-        // Set the payment on the order
-        order.setPayment(payment);
-        orderRepository.save(order);  // Save the order with the payment information
-
-        // Set the transaction status to true since the order was successfully placed
-        transaction.setTransactionStatus(true);
-        transactionRepository.save(transaction);  // Update the transaction status
-
-        // Empty the user's cart after successful order placement
-        cart.getCartItems().clear();  // Clear all cart items
-        cartRepository.save(cart);  // Save the updated cart
-
-        // Return a success message
-        map.put("message", "Order placed successfully!");
-        map.put("orderId", order.getId());
-        return new ResponseEntity<>(map, HttpStatus.CREATED);
     }
+
+    /**
+     * Retrieves a list of all users.
+     * <p>
+     * Converts User entities to UserDTO objects for response and returns the list.
+     * </p>
+     *
+     * @return ResponseEntity containing a list of user details.
+     */
+    @Override
+    public ResponseEntity<Object> findAllUsers() {
+        // Fetch users from the repository
+        List<User> users = userRepository.findAll();
+
+        // Map User entities to UserDTO objects
+        List<UserDTO> userDTOs = users.stream().map(user -> {
+            String roleName = (user.getRole() != null) ? user.getRole().getName() : "No Role";
+            boolean hasWallet = (user.getWallet() != null);
+
+            double walletBalance = user.getWallet() != null ? user.getWallet().getBalance() : 0.0;
+            return new UserDTO(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getRole().getName(),
+                    user.getWallet() != null,
+                    user.getAddress(),
+                    user.getPhoneNumber(),
+                    walletBalance);
+        }).collect(Collectors.toList());
+
+        // Prepare the response
+
+        return ResponseEntity.ok(Map.of("Data", userDTOs));
+    }
+
+    /**
+     * Retrieves a user by their ID.
+     * <p>
+     * Throws a ResourceNotFoundException if no user is found with the given ID.
+     * </p>
+     *
+     * @param id The ID of the user to retrieve.
+     * @return ResponseEntity containing the user details.
+     */
+    @Override
+    public ResponseEntity<Object> findUserById(int id) {
+        // Fetch the user using the repository
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        return ResponseEntity.ok(Map.of("User", user));
+    }
+
+    /**
+     * Soft deletes a user by setting the deleted flag to true.
+     * <p>
+     * Throws a ResourceNotFoundException if no user is found with the given ID.
+     * </p>
+     *
+     * @param id The ID of the user to delete.
+     * @return ResponseEntity containing a success message.
+     */
+    @Override
+    public ResponseEntity<Object> deleteUser(int id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+
+        // Soft delete the user by setting the deleted flag to true
+        user.setDeleted(true);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("message", "User deleted successfully!"));
+
+    }
+
 }
+
+
 

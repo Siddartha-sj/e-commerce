@@ -2,17 +2,20 @@ package com.assignment.DTO;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class PromoCodeDTO {
 
-    @NotNull(message = "Promo code cannot be null")
+    @NotNull(message = "Promo code is required!")
     @Size(min = 1, max = 100, message = "Promo code must be between 1 and 100 characters")
     private String code;
 
+    @NotNull(message = "DiscountPercentage is required!")
     @DecimalMin(value = "0.01", message = "Discount percentage must be greater than 0")
     private Double discountPercentage;
 
+    @NotNull(message = "Minimum order amount is required!")
     @DecimalMin(value = "0.01", message = "Minimum order amount must be greater than 0")
     private Double minOrderAmount;
 
@@ -24,10 +27,21 @@ public class PromoCodeDTO {
     @NotNull(message = "Active status must be specified")
     private Boolean isActive;
 
-    @NotNull(message = "Expiry date must be specified")
+    @NotNull(message = "Expiry date must be specified in format YYYY-MM-DD")
+    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Expiry date must be in the format YYYY-MM-DD")
     private String expiryDate;
 
+    private String productName;
+
     // Getters and setters
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
 
     public String getCode() {
         return code;

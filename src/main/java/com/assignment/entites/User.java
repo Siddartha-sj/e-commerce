@@ -29,6 +29,27 @@ public class User extends Audit {
     @JsonIgnore
     private Wallet wallet;
 
+    @Column(nullable = true)
+    private String address;
+
+    @Column(nullable = true)
+    private String phoneNumber;
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
 
     public int getId() {
         return id;

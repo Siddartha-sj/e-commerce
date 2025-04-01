@@ -1,5 +1,8 @@
 package com.assignment.services;
 
+import com.assignment.DTO.AddressRequestDTO;
+import com.assignment.DTO.LoginDTO;
+import com.assignment.DTO.UserDTO;
 import com.assignment.DTO.UserRegistrationDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -8,17 +11,19 @@ import org.springframework.validation.BindingResult;
 public interface UserService {
 
 
-    public ResponseEntity<Object> save(@Valid UserRegistrationDTO userRegistrationDTO, BindingResult bindingResult);
+    ResponseEntity<Object> register(UserRegistrationDTO userRegistrationDTO, BindingResult bindingResult);
 
-    public ResponseEntity<Object> login(String username, String password);
+    ResponseEntity<Object> login(LoginDTO loginDTO, BindingResult bindingResult);
 
-    public ResponseEntity<Object> findAllProduct();
+    ResponseEntity<Object> getUserProfile(String authorizationHeader);
 
-    public ResponseEntity<Object> addProductToCart(int userId, int productId, int quantity);
+    ResponseEntity<Object> findAllUsers();
 
-    public ResponseEntity<Object> removeProductFromCart(int userId, int productId);
+    ResponseEntity<Object> findUserById(int id);
 
-    public ResponseEntity<Object> placeOrder(int userId, String promoCode);
+    ResponseEntity<Object> deleteUser(int id);
 
+    ResponseEntity<Object> updateAddress(String authorizationHeader, AddressRequestDTO addressRequestDTO, BindingResult bindingResult);
 
+    ResponseEntity<Object> updateUserProfile(String authorizationHeader, UserDTO userDTO);
 }

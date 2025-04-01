@@ -1,12 +1,14 @@
 package com.assignment.DTO;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public class CategoryDTO {
 
-    @NotNull(message = "Name cannot be null")
-    @Size(min = 1, max = 255, message = "Name must be between 1 and 255 characters")
+    @NotBlank(message = "Name is required")
+    @NotEmpty(message = "Name cannot be empty")
     private String name;
 
     public String getName() {

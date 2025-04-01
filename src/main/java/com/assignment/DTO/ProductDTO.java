@@ -5,34 +5,46 @@ import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Min;
 
 public class ProductDTO {
-    private int id;
+    private int productId;
 
-    @NotNull(message = "SKU cannot be null")
+    @NotNull(message = "SKU is required!")
     @Min(value = 1, message = "SKU must be greater than 0")
-    private int sku;
+    private Integer sku;
 
-    @NotNull(message = "Name cannot be null")
+    @NotNull(message = "Name is required!")
     @Size(min = 1, max = 255, message = "Name must be between 1 and 255 characters")
     private String name;
 
-    @NotNull(message = "Price cannot be null")
+    @NotNull(message = "Price is required!")
     @Min(value = 0, message = "Price must be greater than or equal to 0")
-    private double price;
+    private Double price;
 
+    @NotNull(message = "Image Url is required!")
     private String imageUrl;
 
-    @NotNull(message = "Category ID cannot be null")
-    private int categoryId;
+    public String getCategoryName() {
+        return categoryName;
+    }
+
+    public void setCategoryName(String categoryName) {
+        this.categoryName = categoryName;
+    }
+
+    @NotNull(message = "Category Id is required!")
+    private Integer categoryId;
+
+    // ✅ Add category name to DTO
+    private String categoryName;
 
     private boolean isActive = true;
 
     // Getters and Setters
     public int getId() {
-        return id;
+        return productId;
     }
 
     public void setId(int id) {
-        this.id = id;
+        this.productId = id;
     }
 
     public int getSku() {

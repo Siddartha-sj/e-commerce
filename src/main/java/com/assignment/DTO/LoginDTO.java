@@ -1,10 +1,9 @@
 package com.assignment.DTO;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 
-public class UserRegistrationDTO {
+public class LoginDTO {
 
     @NotBlank(message = "Username is required")
     @NotEmpty(message = "Username cannot be empty")
@@ -13,23 +12,6 @@ public class UserRegistrationDTO {
     @NotBlank(message = "Password is required")
     @NotEmpty(message = "Password cannot be empty")
     private String password;
-
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
-    @NotEmpty(message = "Email cannot be empty")
-    private String email;
-
-    @NotBlank(message = "Role is required")
-    @NotEmpty(message = "Role cannot be empty")
-    private String role;
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
 
     public String getUsername() {
         return username;
@@ -46,13 +28,4 @@ public class UserRegistrationDTO {
     public void setPassword(String password) {
         this.password = password;
     }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
 }
-
